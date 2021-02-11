@@ -1,78 +1,89 @@
-import { useEffect, useState } from 'react';
-import { Col, Collapse, Layout, Row, Space, Tabs, Typography } from 'antd';
+import {useEffect, useState} from 'react'
+import {Col, Collapse, Layout, Row, Space, Tabs, Typography} from 'antd'
 
-import './App.css';
+import logo from './favalorologo.png'
 
-const { Panel } = Collapse;
-const { Header, Footer, Content } = Layout;
-const { TabPane } = Tabs;
-const { Text } = Typography;
+import './App.css'
+
+const {Panel} = Collapse
+const {Header, Footer, Content} = Layout
+const {TabPane} = Tabs
+const {Text} = Typography
+
+const FLOORS = [1, 3, 5, 6, 7, 8, 9]
 
 function App() {
-  const [patients, setPatients] = useState([]);
+  const [patients, setPatients] = useState([])
+  const [activeFloor, setActiveFloor] = useState(1)
+
   useEffect(() => {
-    fetch('http://localhost/labchart/labchart.php?piso=6')
-      .then((response) => response.json())
-      .then(setPatients);
-  }, []);
+    fetch(`http://localhost/labchart/labchart.php?piso=${activeFloor}`)
+      .then(response => response.json())
+      .then(setPatients)
+  }, [activeFloor])
+
+  const handleChange = floor => {
+    const parsedFloor = floor.split('-')
+    const floorNumber = Number(parsedFloor[1])
+
+    setActiveFloor(floorNumber)
+  }
 
   return (
     <Layout>
-      <Header>Fundacion Favaloro</Header>
+      <Header style={{display: 'flex', alignItems: 'center', height: '100px'}}>
+        <img alt="Fundacion Favaloro" src={logo} style={{width: '180px'}} />
+      </Header>
       <Content>
-        <Tabs defaultActiveKey="1" centered>
-          <TabPane tab="Piso 1" key="1">
-            <Collapse defaultActiveKey={[]}>
-              {patients.map(({ HC, Nombre = '', ...rest }) => (
-                <Panel
-                  key={JSON.stringify(rest)}
-                  header={`${rest['Cama']} - HC:${HC} - ${Nombre}`}
-                >
-                  <Row gutter={[32]}>
-                    {Object.keys(rest).map((title) => {
-                      if (title.toLocaleLowerCase() === 'cama') return null;
-                      if (title.toLowerCase() === 'orden') {
+        <Tabs defaultActiveKey={1} centered onChange={handleChange}>
+          {FLOORS.map((floor, index) => (
+            <TabPane key={`floor-${floor}`} tab={`Piso ${floor}`}>
+              <Collapse defaultActiveKey={[]}>
+                {patients.map(({HC, Nombre = '', ...rest}) => (
+                  <Panel
+                    key={JSON.stringify(rest)}
+                    header={`${rest['Cama']} - HC:${HC} - ${Nombre}`}
+                  >
+                    <Row gutter={[32]}>
+                      {Object.keys(rest).map(title => {
+                        if (title.toLocaleLowerCase() === 'cama') return null
+                        if (title.toLowerCase() === 'orden') {
+                          return (
+                            <Col>
+                              <Space direction="vertical">
+                                <h1 style={{textTransform: 'capitalize'}}>
+                                  {title}
+                                </h1>
+                                <Text>{rest[title]}</Text>
+                              </Space>
+                            </Col>
+                          )
+                        }
+
                         return (
                           <Col>
                             <Space direction="vertical">
-                              <h1 style={{ textTransform: 'capitalize' }}>
-                                {title}
-                              </h1>
-                              <Text>{rest[title]}</Text>
+                              <h1>{title}</h1>
+                              {Object.keys(rest[title]).map(prop => (
+                                <Text>
+                                  {`${rest[title][prop].nombre_estudio}: ${rest[title][prop].resultado} ${rest[title][prop].unidades}`}
+                                </Text>
+                              ))}
                             </Space>
                           </Col>
-                        );
-                      }
-
-                      return (
-                        <Col>
-                          <Space direction="vertical">
-                            <h1>{title}</h1>
-                            {Object.keys(rest[title]).map((prop) => (
-                              <Text>
-                                {`${rest[title][prop].nombre_estudio}: ${rest[title][prop].resultado} ${rest[title][prop].unidades}`}
-                              </Text>
-                            ))}
-                          </Space>
-                        </Col>
-                      );
-                    })}
-                  </Row>
-                </Panel>
-              ))}
-            </Collapse>
-          </TabPane>
-          <TabPane tab="Piso 2" key="2">
-            Content of Tab Pane 2
-          </TabPane>
-          <TabPane tab="Piso 3" key="3">
-            Content of Tab Pane 3
-          </TabPane>
+                        )
+                      })}
+                    </Row>
+                  </Panel>
+                ))}
+              </Collapse>
+            </TabPane>
+          ))}
         </Tabs>
       </Content>
       <Footer>Footer</Footer>
     </Layout>
-  );
+  )
 }
 
-export default App;
+export default App
