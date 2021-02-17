@@ -5,17 +5,13 @@
         if ($method == "GET"){
             $piso = $_GET['piso'];
         }
+		
         $debugging = true; # Cambia la fuente de datos. False: consulta en la DB del hospital. True: usa los datos de carpeta mock_data
         if ($debugging) {
-            $fecha_actual = DateTime::createFromFormat('d/m/Y H:i', '08/12/2020 23:00');
-            $fecha_menos_24h = DateTime::createFromFormat('d/m/Y H:i', '08/12/2020 23:00')->modify('-1 day');
-            $fecha_menos_48h = DateTime::createFromFormat('d/m/Y H:i', '08/12/2020 23:00')->modify('-2 day');
+            $fecha_actual = "07/12/2020"; #Para que trate al mock como laboratorios de hoy.
         }
         else {
-            $fecha_actual = date_create(date('d-m-Y H:i'));
-            $fecha_menos_24h = date_create(date('d-m-Y H:i'))->modify('-1 day');
-            $fecha_menos_48h = date_create(date('d-m-Y H:i'))->modify('-2 day');
-            
+            $fecha_actual = date('d/m/Y');
         }
         
         $agrupar_estudios_array = array(
@@ -49,26 +45,29 @@
 	function ordenes_de_paciente($HC) {	
             /* Consulta al web-service función ordenestot, junta todas las ordenes de un paciente (identificado por HC) 
              * en un array (n_solicitud, timestamp)" */
-            global $debugging;
+            global $debugging, $fecha_actual;
             $ordenes_array = array();
             if ($debugging) {
                 $ordenes_raw = json_decode(file_get_contents(".\\mock_data\\ordenes\\ordenes".$HC.".json"), true);
             } else {
                 $ordenes_raw = json_decode(file_get_contents("http://172.24.24.131:8007/html/internac.php?funcion=ordenestot&HC=".$HC), true);
             }
-                foreach ($ordenes_raw['ordenestot'] as $orden) {
-                        $timestamp_labo = DateTime::createFromFormat('d/m/Y H:i', $orden['ordenestot']['RECEPCION']);
-                        $ordenes_array[] = array("n_solicitud" => $orden['ordenestot']['NRO_SOLICITUD'], "timestamp" => $timestamp_labo);
+                    foreach ($ordenes_raw['ordenestot'] as $orden)	{
+                            $fecha_labo = substr($orden['ordenestot']['RECEPCION'], 0, 10); #Elimina la hora del timestamp del lab, deja solo la fecha.
+                            if ($fecha_labo == $fecha_actual) {  #Limita los laboratorios a los que sean del di­a actual. TODO: Manejo de fechas para incluir labos viejos.
+                                    $ordenes_array[] = array("n_solicitud" => $orden['ordenestot']['NRO_SOLICITUD'], "timestamp" => $orden['ordenestot']['RECEPCION']);
+
+                            }
+
 
                     }
                     return $ordenes_array;
             }
 
-	function procesar_estudio($orden, $timestamp) {
-            /* Busca los resultados de laboratorio de una orden, y los preprocesa para darles la siguiente estructura:
+	function procesar_estudio($orden) {
+            /* Busca los resultados de laboratorio de una orden, y los preprocesa para darles la estructura final:
              * array(
-             *      "orden" => 01234567,
-             *      "timestamp" => "20/11/2020 06:00"
+             *      "orden" => 01234567
              *      "Hemograma" => array(
              *              "HTO" => array(
              *                      "nombre_estudio" => "Hematocrito",
@@ -86,20 +85,15 @@
              *              )    
              * )
              */
+            #Recopila los datos en bruto del laboratorio y los pre-procesa
             global $debugging, $agrupar_estudios_array, $grupo_estudios_actual;
             $estudio_array = array();
-            $alertas = array();
             if ($debugging) {
                 $estudio_raw = json_decode(file_get_contents(".\\mock_data\\estudios\\estudio_".$orden.".json"), true);
-                if (!$estudio_raw) {
-                    return NULL;
-                }
             } else {
                 $estudio_raw = json_decode(file_get_contents("http://172.24.24.131:8007/html/internac.php?funcion=estudiostot&orden=".$orden), true);
             }
-            
             $estudio_array['orden'] = $orden;
-            $estudio_array['timestamp'] = $timestamp;
             #Agrupa cada resultado del laboratorio segun los grupos definidos en $agrupar_estudios_array (Hemograma, hepatograma, etc)
             foreach ($estudio_raw['estudiostot'] as $estudio) {	
                 $codigo = $estudio['estudiostot']['CODANALISI']; 
@@ -121,9 +115,7 @@
                         $estudio_array[$grupo][$codigo] = array(
                             'nombre_estudio' => $estudio['estudiostot']['NOMANALISIS'], 
                             'resultado' => $estudio['estudiostot']['RESULTADO'],
-                            'unidades' => $estudio['estudiostot']['UNIDAD'],
-                            'color' => "black",
-                            'info' => ""
+                            'unidades' => $estudio['estudiostot']['UNIDAD']
                             );
                         $categoria_encontrada = true;
                         break; 
@@ -133,9 +125,7 @@
                     $estudio_array['Otros'][$codigo] = array(
                     'nombre_estudio' => $estudio['estudiostot']['NOMANALISIS'], 
                     'resultado' => $estudio['estudiostot']['RESULTADO'],
-                    'unidades' => $estudio['estudiostot']['UNIDAD'],
-                    'color' => "black",
-                    'info' => ""
+                    'unidades' => $estudio['estudiostot']['UNIDAD']
                     );
                 }
             }
@@ -144,7 +134,7 @@
             uksort($estudio_array, "ordenar_grupos_de_estudios");
             foreach ($estudio_array as $key => $value) {
                 $grupo_estudios_actual = $key;
-                if ($key == "orden" or $key == "timestamp") {
+                if ($key == "orden") {
                     continue;
                 }
                 uksort($value, "ordenar_estudios");
@@ -176,55 +166,16 @@
             $resultado = $a_pos - $b_pos;
             return $resultado;
         }
-                
-        function formatear_fechas_visualizacion($estudio) {
-            $estudio["timestamp"] = $estudio["timestamp"]->format("d/m/Y H:i");
-            return $estudio;
-        }
-        
-        function analisis_de_alertas($estudios_de_hoy, $todos_los_estudios) {
-            foreach($estudios_de_hoy as $key_estudio => $estudio_analizado) {
-                foreach(array_slice($estudio_analizado, 5) as $key_grupos => $grupo_de_estudios) {
-                    foreach($grupo_de_estudios as $key_codigo => $array_resultado) {
-                        $resultado = $array_resultado['resultado'];
-                        #ANALISIS DE HEMOGRAMA
-                        if ($key_codigo == "HTO") { #Hematocrito
-                            #Puntos de corte:
-                            if ($resultado < 21) {
-                                $estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["color"] = "red";
-                                $estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["info"] = "Anemia severa con probable requerimiento tranfusional";  
-                            }
-                            $comparativos = array_filter($todos_los_estudios, function($estudio_a_comparar) use($estudio_analizado) {return $estudio_a_comparar["timestamp"] < $estudio_analizado['timestamp'] && isset($estudio_a_comparar["Hemograma"]["HTO"]);});
-                            /*echo "estudio analizado = " . $estudio_analizado["orden"];
-                            echo "\nEstudios a comparar:";
-                            print_r($comparativos);*/
-                            
-                            }
-                        
-                    }
-                        
-                }
-                        
-                
-            }
-        return $estudios_de_hoy;
-        }  
+      
 # MAIN LOOP
-$todos_los_estudios = array();
-$piso = filter_input(INPUT_GET, "piso", FILTER_SANITIZE_NUMBER_INT);
+$array_final = array();
 $pacientes = pacientes_por_piso($piso);
 foreach ($pacientes as $paciente) {
 	foreach(ordenes_de_paciente($paciente['HC']) as $orden) {
-            $resultado = procesar_estudio($orden['n_solicitud'], $orden['timestamp']);
-            if($resultado == NULL)continue;
-            $todos_los_estudios[] = array_merge($paciente, $resultado);
+            $resultado = procesar_estudio($orden['n_solicitud']);
+            $array_final[] = array_merge($paciente, $resultado);
 	}
 }
-
-$estudios_de_hoy = array_filter($todos_los_estudios, function($estudio) use($fecha_menos_24h) { return $estudio["timestamp"] > $fecha_menos_24h;});
-$estudios_de_hoy_analizados = analisis_de_alertas($estudios_de_hoy, $todos_los_estudios);
-$estudios_analizados_formateados = array_map("formatear_fechas_visualizacion", $estudios_de_hoy_analizados);
-$array_final = array_values($estudios_analizados_formateados);
 echo json_encode($array_final);
 
  /* Estructura del JSON final:
