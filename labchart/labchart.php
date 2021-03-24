@@ -7,9 +7,9 @@
         }
         $debugging = true; # Cambia la fuente de datos. False: consulta en la DB del hospital. True: usa los datos de carpeta mock_data
         if ($debugging) {
-            $fecha_actual = DateTime::createFromFormat('d/m/Y H:i', '08/12/2020 23:00');
-            $fecha_menos_24h = DateTime::createFromFormat('d/m/Y H:i', '08/12/2020 23:00')->modify('-1 day');
-            $fecha_menos_48h = DateTime::createFromFormat('d/m/Y H:i', '08/12/2020 23:00')->modify('-2 day');
+            $fecha_actual = DateTime::createFromFormat('d/m/Y H:i', '07/12/2020 23:00');
+            $fecha_menos_24h = DateTime::createFromFormat('d/m/Y H:i', '07/12/2020 23:00')->modify('-1 day');
+            $fecha_menos_48h = DateTime::createFromFormat('d/m/Y H:i', '07/12/2020 23:00')->modify('-2 day');
         }
         else {
             $fecha_actual = date_create(date('d-m-Y H:i'));
@@ -29,6 +29,37 @@
             'Dosajes' => array("FK"),
             'Excluir' => array('BAS', 'EOS', 'META', 'MI', 'MON', 'PRO', 'SB', 'SUMAL', "SR", "TM", "NE", "TEMP", "CTO2", "ERC", "QUICKT", "FIO2", "A/A", "RPLA"),
             'Otros' => array()
+        );
+        
+        $abreviar_nombres_estudios = array(
+            "HTO" => "Hto",
+            "HGB" => "Hb",
+            "LEU" => "GB", 
+            "PLLA" => "Plaq",
+            "NAS" => "Na",
+            "KAS" => "K",
+            "MGS" => "Mg",
+            "CAS" => "Ca",
+            "CL" => "Cl",
+            "FOS" => "P",
+            "GLU" => "Glc",
+            "URE" => "Ur",
+            "CRE" => "Cr",
+            "TGO" => "GOT",
+            "TGP" => "GPT",
+            "ALP" => "FAL",
+            "BIT" => "BT",
+            "BID" => "BD",
+            "GGT" => "GGT",
+            "QUICKA" => "TP",
+            "QUICKR" => "RIN",
+            "APTT" => "APTT",
+            "PHT" => "PH",
+            "PO2T" => "PO2",
+            "PCO2T" => "PCO2",
+            "CO3H" => "HCO3",
+            "SO2" => "Sat O2",
+            "FK" => "FK"
         );
 
         function pacientes_por_piso($piso) {	
@@ -90,7 +121,7 @@
             $estudio_array = array();
             $alertas = array();
             if ($debugging) {
-                $estudio_raw = json_decode(file_get_contents(".\\mock_data\\estudios\\estudio_".$orden.".json"), true);
+                $estudio_raw = json_decode(@ file_get_contents(".\\mock_data\\estudios\\estudio_".$orden.".json"), true);
                 if (!$estudio_raw) {
                     return NULL;
                 }
@@ -110,7 +141,7 @@
                     continue;
                 }
                 if (is_null($estudio['estudiostot']['UNIDAD'])) {
-                    $estudio['estudiostot']['UNIDAD'] = " "; 
+                    $estudio['estudiostot']['UNIDAD'] = ""; 
                 }
                 
                  # Itera en los distintos $grupos de $estudios predefinidos buscando a cual pertenece el $estudio. Cuando lo encuentra, break
@@ -183,23 +214,134 @@
         }
         
         function analisis_de_alertas($estudios_de_hoy, $todos_los_estudios) {
+            global $piso;
             foreach($estudios_de_hoy as $key_estudio => $estudio_analizado) {
-                foreach(array_slice($estudio_analizado, 5) as $key_grupos => $grupo_de_estudios) {
+                foreach(array_slice($estudio_analizado, 5, -2) as $key_grupos => $grupo_de_estudios) {
                     foreach($grupo_de_estudios as $key_codigo => $array_resultado) {
-                        $resultado = $array_resultado['resultado'];
+                        $resultado_de_hoy = $array_resultado['resultado'];
                         #ANALISIS DE HEMOGRAMA
-                        if ($key_codigo == "HTO") { #Hematocrito
+                        #Hematocrito
+                        if ($key_codigo == "HTO") { 
                             #Puntos de corte:
-                            if ($resultado < 21) {
-                                $estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["color"] = "red";
-                                $estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["info"] = "Anemia severa con probable requerimiento tranfusional";  
+                            if ($resultado_de_hoy < 40 and $resultado_de_hoy > 21) {
+                                $estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["color"] = "orange";
+                                $estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["info"] .= "Anemia. ";  
                             }
-                            $comparativos = array_filter($todos_los_estudios, function($estudio_a_comparar) use($estudio_analizado) {return $estudio_a_comparar["timestamp"] < $estudio_analizado['timestamp'] && isset($estudio_a_comparar["Hemograma"]["HTO"]);});
+                            if ($resultado_de_hoy <= 21) {
+                                $estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["color"] = "red";
+                                $estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["info"] .= "Anemia severa con probable requerimiento tranfusional. ";  
+                            }
+                            $estudios_comparativos = array_filter($todos_los_estudios, function($estudio_a_comparar) use($estudio_analizado) {return $estudio_a_comparar["timestamp"] < $estudio_analizado['timestamp'] && isset($estudio_a_comparar["Hemograma"]["HTO"]);});
+                            foreach($estudios_comparativos as $estudio_a_comparar) {
+                                $delta_resultado = $resultado_de_hoy - $estudio_a_comparar["Hemograma"]["HTO"]["resultado"];
+                                $delta_tiempo = $estudio_analizado["timestamp"]->diff($estudio_a_comparar["timestamp"]);
+                                $delta_horas = $delta_tiempo->h;
+                                $delta_horas += $delta_tiempo->days*24;
+                                if (($delta_resultado <= -7 and $delta_horas <=48) or $delta_resultado <= -10) {
+                                    $estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["color"] = "red";
+                                    $estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["info"] .= "Caida de " . $delta_resultado . " puntos en " . $delta_horas . " hs. ";  
+                                }
+                            } 
                             /*echo "estudio analizado = " . $estudio_analizado["orden"];
                             echo "\nEstudios a comparar:";
                             print_r($comparativos);*/
                             
+                        }
+                        #Hemoglobina
+                        if ($key_codigo == "HGB") {
+                            if ($resultado_de_hoy <= 7) {
+                                $estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["color"] = "red";
+                                $estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["info"] .= "Anemia con probable requerimiento tranfusional. ";  
+
                             }
+                        }
+                        #Plaquetas
+                        if ($key_codigo == "PLLA") { 
+                            if (10 < $resultado_de_hoy and $resultado_de_hoy <= 20) {
+                                $estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["color"] = "orange";
+                                $estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["info"] .= "Plaquetopenia severa. ";  
+                            }
+                            if ($resultado_de_hoy <= 10) {
+                                $estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["color"] = "red";
+                                $estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["info"] .= "Plaquetopenia con requerimiento tranfusional. ";  
+                            }
+                        }
+                        # FIN DE HEMOGRAMA
+                        # INICIO DE FUNCION RENAL
+                        # Creatinina
+                        if ($key_codigo == "CRE") { 
+                            #Puntos de corte:
+                            if ($resultado_de_hoy > 1.2) {
+                                $estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["color"] = "orange";
+                            }
+                            if ($resultado_de_hoy > 2) {
+                                $estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["color"] = "red";
+                            }
+                            #Comparación con resultados de dias previos
+                            $estudios_comparativos = array_filter($todos_los_estudios, function($estudio_a_comparar) use($estudio_analizado) {return $estudio_a_comparar["timestamp"] < $estudio_analizado['timestamp'] && isset($estudio_a_comparar["Funcion renal"]["CRE"]);});
+                            foreach($estudios_comparativos as $estudio_a_comparar) {
+                                $creatinina_previa = $estudio_a_comparar["Funcion renal"]["CRE"]["resultado"];
+                                $delta_resultado = $resultado_de_hoy - $creatinina_previa;
+                                $delta_tiempo = $estudio_analizado["timestamp"]->diff($estudio_a_comparar["timestamp"]);
+                                $delta_horas = $delta_tiempo->h;
+                                $delta_horas += $delta_tiempo->days*24;
+                                if (($delta_resultado >= 0.3 and $delta_horas <=48 and $resultado_de_hoy < 3) or $resultado_de_hoy > ($creatinina_previa * 1.5)) {
+                                    $estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["color"] = "red";
+                                    $estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["info"] = "AKI. Aumento de " . $delta_resultado . "mg/dl en " . $delta_horas . " hs. ";  
+                                }
+                            } 
+                            /*echo "estudio analizado = " . $estudio_analizado["orden"];
+                            echo "\nEstudios a comparar:";
+                            print_r($comparativos);*/
+                            
+                        }
+                        
+                        # MEDIO INTERNO
+                        # Sodio:
+                        if ($key_codigo == "NAS") {
+                            if ($resultado_de_hoy <= 130 and $resultado_de_hoy > 125) {
+                                $estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["color"] = "orange";
+                                $estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["info"] .= "Hiponatremia moderada. ";
+                            }
+                            if ($resultado_de_hoy <= 125) {
+                                $estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["color"] = "red";
+                                $estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["info"] .= "Hiponatremia severa. ";
+                            }
+                            
+                            $estudios_comparativos = array_filter($todos_los_estudios, function($estudio_a_comparar) use($estudio_analizado) {return $estudio_a_comparar["timestamp"] < $estudio_analizado['timestamp'] && isset($estudio_a_comparar["Medio interno"]["NAS"]);});
+                            foreach($estudios_comparativos as $estudio_a_comparar) {
+                                $sodio_previo = $estudio_a_comparar["Medio interno"]["NAS"]["resultado"];
+                                $delta_resultado = $resultado_de_hoy - $sodio_previo;
+                                $delta_tiempo = $estudio_analizado["timestamp"]->diff($estudio_a_comparar["timestamp"]);
+                                $delta_horas = $delta_tiempo->h;
+                                $delta_horas += $delta_tiempo->days*24;
+                                if (abs($delta_resultado) >= 10 and $delta_horas <=36) {
+                                    $estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["color"] = "red";
+                                    $estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["info"] .= "Shift de sodio de " . $delta_resultado . "mEq/l en " . $delta_horas . " hs. ";  
+                                }
+                            } 
+
+                        }
+                        # Potasio:
+                        if ($key_codigo == "KAS") {
+                            if (($resultado_de_hoy < 4 and in_array($piso, array("3", "5", "6"))) or $resultado_de_hoy < 3.5) {
+                                $estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["color"] = "orange";
+                                $estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["info"] .= "Hipokalemia. ";
+                            }
+                            if ($resultado_de_hoy < 3) {
+                                $estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["color"] = "red";
+                                $estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["info"] .= "HIPOKALEMIA SEVERA. ";
+                            }
+                            if ($resultado_de_hoy > 5.5) {
+                                $estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["color"] = "orange";
+                                $estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["info"] .= "Hiperkalemia. ";
+                            }
+                            if ($resultado_de_hoy > 6) {
+                                $estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["color"] = "red";
+                                $estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["info"] .= "HIPERKALEMIA SEVERA. ";
+                            }
+                        }
+                        
                         
                     }
                         
@@ -209,6 +351,31 @@
             }
         return $estudios_de_hoy;
         }  
+        
+        function textificar_array($estudios) {
+            global $abreviar_nombres_estudios;
+            foreach ($estudios as $key => $solicitud) {
+                $textificado_largo = "";
+                $textificado_corto = "";
+                foreach(array_slice($solicitud, 5) as $key_grupos => $grupo_de_estudios) {
+                    foreach($grupo_de_estudios as $grupo => $estudio) {
+                        $textificado_largo .= $estudio["nombre_estudio"] . ": " . $estudio["resultado"] . $estudio["unidades"] . ", ";
+                        if (isset($abreviar_nombres_estudios[$grupo])) { 
+                            $textificado_corto .= $abreviar_nombres_estudios[$grupo] . ": " . $estudio["resultado"] . " ";
+                        }
+                    } 
+                }
+                $estudios[$key]["text_largo"] = $textificado_largo;
+                $estudios[$key]["text_corto"] = $textificado_corto;
+
+            }
+            return $estudios;
+        }
+        
+        function grabar_word($json) {
+            return $json;
+        }
+        
 # MAIN LOOP
 $todos_los_estudios = array();
 $piso = filter_input(INPUT_GET, "piso", FILTER_SANITIZE_NUMBER_INT);
@@ -222,6 +389,8 @@ foreach ($pacientes as $paciente) {
 }
 
 $estudios_de_hoy = array_filter($todos_los_estudios, function($estudio) use($fecha_menos_24h) { return $estudio["timestamp"] > $fecha_menos_24h;});
+$estudios_de_hoy = textificar_array($estudios_de_hoy);
+
 $estudios_de_hoy_analizados = analisis_de_alertas($estudios_de_hoy, $todos_los_estudios);
 $estudios_analizados_formateados = array_map("formatear_fechas_visualizacion", $estudios_de_hoy_analizados);
 $array_final = array_values($estudios_analizados_formateados);
@@ -233,22 +402,29 @@ echo json_encode($array_final);
            "HC":11111,
            "Nombre":"PEREZ, JUAN",
            "Cama":"701A",
+           "timestamp":"08\/12\/2020 06:00"   (nuevo)
            "orden":"222222222",
            "Hemograma":{
               "HTO":{
                  "nombre_estudio":"Hematocrito",
-                 "resultado":"39",
-                 "unidades":null
+                 "resultado":"29",
+                 "unidades": " "
+                 "color":"red",    (nuevo)
+  *              "info":"Anemia"   (nuevo)
               },
               "HGB":{
                  "nombre_estudio":"Hemoglobina",
                  "resultado":"12.5",
-                 "unidades":null
+                 "unidades":"gr/dl",
+  *              "color":"black",
+  *              "info":""
               }
            }
-           "Hepatograma:{
+           "Hepatograma":{
            ....
-           }        
+           }
+  *        "text_largo": "Hematocrito 29%, Hemoglobina 12.5gr/dl",    (nuevo)
+  *        "text_corto": "Hto 29, Hb 12.5"                            (nuevo)
        },
        {
            "HC":11112,
