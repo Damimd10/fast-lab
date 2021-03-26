@@ -30,6 +30,11 @@
   color: #61dafb;
 }
 
+.alerta {
+  color: orange;
+}
+
+
 @keyframes App-logo-spin {
   from {
     transform: rotate(0deg);

@@ -5,6 +5,10 @@
         if ($method == "GET"){
             $piso = $_GET['piso'];
         }
+        
+        $req_dump = print_r($_REQUEST, true);
+        $fp = file_put_contents('request.log', $req_dump, FILE_APPEND);
+
         $debugging = true; # Cambia la fuente de datos. False: consulta en la DB del hospital. True: usa los datos de carpeta mock_data
         if ($debugging) {
             $fecha_actual = DateTime::createFromFormat('d/m/Y H:i', '07/12/2020 23:00');
@@ -19,7 +23,7 @@
         }
         
         $agrupar_estudios_array = array(
-            'orden' => array(),
+            'solicitud' => array(),
             'Hemograma' => array('HTO', 'HGB',  "CHCM", "HCM", "VCM", "RDW", 'LEU','NSEG', 'CAY',  'LIN', 'PLLA' ),
             'Medio interno' => array('NAS', 'KAS', "MGS", 'CAS', "CL", "FOS", "GLU"),
             'Funcion renal' => array('URE', 'CRE'),
@@ -98,7 +102,7 @@
 	function procesar_estudio($orden, $timestamp) {
             /* Busca los resultados de laboratorio de una orden, y los preprocesa para darles la siguiente estructura:
              * array(
-             *      "orden" => 01234567,
+             *      "solicitud" => 01234567,
              *      "timestamp" => "20/11/2020 06:00"
              *      "Hemograma" => array(
              *              "HTO" => array(
@@ -129,7 +133,7 @@
                 $estudio_raw = json_decode(file_get_contents("http://172.24.24.131:8007/html/internac.php?funcion=estudiostot&orden=".$orden), true);
             }
             
-            $estudio_array['orden'] = $orden;
+            $estudio_array['solicitud'] = $orden;
             $estudio_array['timestamp'] = $timestamp;
             #Agrupa cada resultado del laboratorio segun los grupos definidos en $agrupar_estudios_array (Hemograma, hepatograma, etc)
             foreach ($estudio_raw['estudiostot'] as $estudio) {	
@@ -175,7 +179,7 @@
             uksort($estudio_array, "ordenar_grupos_de_estudios");
             foreach ($estudio_array as $key => $value) {
                 $grupo_estudios_actual = $key;
-                if ($key == "orden" or $key == "timestamp") {
+                if ($key == "solicitud" or $key == "timestamp") {
                     continue;
                 }
                 uksort($value, "ordenar_estudios");
@@ -242,10 +246,7 @@
                                     $estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["info"] .= "Caida de " . $delta_resultado . " puntos en " . $delta_horas . " hs. ";  
                                 }
                             } 
-                            /*echo "estudio analizado = " . $estudio_analizado["orden"];
-                            echo "\nEstudios a comparar:";
-                            print_r($comparativos);*/
-                            
+
                         }
                         #Hemoglobina
                         if ($key_codigo == "HGB") {
@@ -290,10 +291,7 @@
                                     $estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["info"] = "AKI. Aumento de " . $delta_resultado . "mg/dl en " . $delta_horas . " hs. ";  
                                 }
                             } 
-                            /*echo "estudio analizado = " . $estudio_analizado["orden"];
-                            echo "\nEstudios a comparar:";
-                            print_r($comparativos);*/
-                            
+
                         }
                         
                         # MEDIO INTERNO
@@ -372,8 +370,20 @@
             return $estudios;
         }
         
-        function grabar_word($json) {
-            return $json;
+        function agrupar_por_pacientes($array_original, $pacientes) {
+            # Esta funcion es una atrocidad para emparchar un error original en la estructura de datos. Pendiente: Refactoring para evitar esto
+            $array_resultado = array();
+            foreach ($pacientes as $paciente) {
+                $array_resultado[$paciente['HC']] = $paciente;
+                foreach ($array_original as $estudio) {
+                    if ($estudio['HC'] == $paciente['HC']) {
+                        $nuevo_array_estudios = array("Solicitud" => array_slice($estudio, 3, $length = 2) + array_slice($estudio, -2)) + array_slice($estudio, 5, -2);
+                        $array_resultado[$estudio["HC"]][]= $nuevo_array_estudios;
+                    }
+                    
+                }
+            }
+            return $array_resultado;
         }
         
 # MAIN LOOP
@@ -393,6 +403,8 @@ $estudios_de_hoy = textificar_array($estudios_de_hoy);
 
 $estudios_de_hoy_analizados = analisis_de_alertas($estudios_de_hoy, $todos_los_estudios);
 $estudios_analizados_formateados = array_map("formatear_fechas_visualizacion", $estudios_de_hoy_analizados);
+
+
 $array_final = array_values($estudios_analizados_formateados);
 echo json_encode($array_final);
 
@@ -403,7 +415,7 @@ echo json_encode($array_final);
            "Nombre":"PEREZ, JUAN",
            "Cama":"701A",
            "timestamp":"08\/12\/2020 06:00"   (nuevo)
-           "orden":"222222222",
+           "solicitud":"222222222",
            "Hemograma":{
               "HTO":{
                  "nombre_estudio":"Hematocrito",
