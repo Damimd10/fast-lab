@@ -225,6 +225,10 @@
                         $resultado_de_hoy = $array_resultado['resultado'];
                         #ANALISIS DE HEMOGRAMA
                         #Hematocrito
+						if (!is_numeric($resultado_de_hoy)) {
+							$estudios_de_hoy[$key_estudio][$key_grupos][$key_codigo]["color"] = "orange";
+							continue;
+						}
                         if ($key_codigo == "HTO") { 
                             #Puntos de corte:
                             if ($resultado_de_hoy < 40 and $resultado_de_hoy > 21) {

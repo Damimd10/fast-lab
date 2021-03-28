@@ -1,5 +1,13 @@
 import {useEffect, useState} from 'react'
 import {Col, Collapse, Layout, Row, Space, Tabs, Typography} from 'antd'
+import React from "react";
+import {
+  BrowserRouter as Router,
+  Switch,
+  Route,
+  Link,
+  useRouteMatch
+} from "react-router-dom";
 
 import logo from './favalorologo.png'
 import Tooltip, { useTooltip, TooltipPopup } from "@reach/tooltip";
@@ -19,7 +27,7 @@ const FLOORS = [1, 3, 5, 6, 7, 8, 9]
 
 function App() {
   const [patients, setPatients] = useState([])
-  const [activeFloor, setActiveFloor] = useState(7)
+  const [activeFloor, setActiveFloor] = useState(0)
 
   useEffect(() => {
     fetch(`http://localhost/labchart/labchart.php?piso=${activeFloor}`)
@@ -48,8 +56,10 @@ function App() {
                   <Panel
                     key={JSON.stringify(rest)}
                     header={`${Cama} - ${Nombre} (HC:${HC}) - ${timestamp}`}>
+
                     <Row gutter={[32]}>
                       {Object.keys(rest).map(title => {
+
 						if (title.toLowerCase() === 'text_corto') {
 						return null
 						}
@@ -64,20 +74,9 @@ function App() {
                                   {title}
                                 </h1>
                                 <Text>N°: {rest[title]}</Text>
-								<Text>Fecha: {timestamp} </Text>
+								<Text>Hora: {timestamp.slice(10)} </Text>
 								<Text>  </Text> 
 
-								<button 
-								  onClick={() =>  navigator.clipboard.writeText(rest['text_corto'])}
-								>
-								  Copiar compacto
-								</button>
-
-								<button 
-								  onClick={() =>  navigator.clipboard.writeText(rest['text_largo'])}
-								>
-								  Copiar completo
-								</button>
 
 
                               </Space>
@@ -111,18 +110,51 @@ function App() {
                           </Col>
                         )
                       })}
+					  {
+					        <Col>
+                              <Space direction="vertical">
+                                <h1 style={{textTransform: 'capitalize'}}>
+                                  Acciones
+                                </h1>
+
+								<button 
+								  onClick={() =>  navigator.clipboard.writeText(rest['text_corto'])}
+								>
+								  Copiar compacto
+								</button>
+
+								<button 
+								  onClick={() =>  navigator.clipboard.writeText(rest['text_largo'])}
+								>
+								  Copiar completo
+								</button>
+
+
+                              </Space>
+                            </Col>
+					  }
                     </Row>
+
+
                   </Panel>
-				  
+
                 ))}
               </Collapse>
-			  					{<button> Click me</button>} 
+			<div class="botonDescargar">
+				<button
+					type="button"
+					onClick={(e) => {
+						e.preventDefault();
+						window.location.href="download_word.php?piso="+activeFloor;
+					}}
+				> Descargar Word</button> 
+			</div>
 
             </TabPane>
           ))}
         </Tabs>
       </Content>
-      <Footer>Footer</Footer>
+      <Footer></Footer>
     </Layout>
   )
 }

@@ -30,8 +30,10 @@
   color: #61dafb;
 }
 
-.alerta {
-  color: orange;
+.botonDescargar {
+  margin-top: 25px;
+
+  text-align: center;
 }
 
 
