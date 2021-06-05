@@ -9,6 +9,7 @@ import Tooltip from "@reach/tooltip"
 import "@reach/tooltip/styles.css"
 import './App.css'
 import useFetch from "react-fetch-hook"
+import LoadingSpinner from './LoadingSpinner/LoadingSpinner';
 
 const {Panel} = Collapse
 const {Header, Footer, Content} = Layout
@@ -32,7 +33,7 @@ async function checkLogin() {
 	let login_respuesta = await response.text()
   if (login_respuesta == "no") {
 	console.log("Credenciales no aprobadas")
-	window.location = `http://192.168.15.168:8001/html/test/login.html`
+	//window.location = `http://192.168.15.168:8001/html/test/login.html`
   }
   if (login_respuesta == "si") { 
 	console.log("Credenciales ok")
@@ -46,6 +47,7 @@ console.log(e)
 function App() {	
 	const [patients, setPatients] = useState([])
 	const [activeFloor, setActiveFloor] = useState(0)
+    const [isLoading, setIsLoading] = useState(true) //Spinner
 
   useEffect(() => {
 	if (controller) {
@@ -86,6 +88,7 @@ function App() {
 				credentials: 'same-origin'
             })
 	  .then(response => {
+		setIsLoading(false)
 		// When cache is recent (< 5 min old), labchart.php returns "usar cache". Improves performance.
 		if (response === "usar cache")  {
 			console.log("usar cache")
@@ -109,6 +112,7 @@ function App() {
     const parsedFloor = floor.split(' ')
     const floorNumber = parsedFloor.pop().split('-').pop()
     setActiveFloor(floorNumber)
+	setIsLoading(true) // Activates spinner
   }
 
 
@@ -117,6 +121,8 @@ function App() {
     <Layout>
       <Header style={{display: 'flex', alignItems: 'center',   justifyContent: 'space-between', height: '100px'}}>
         <img alt="Fundacion Favaloro" src={logo} style={{width: '180px'}} />
+		{ isLoading && <LoadingSpinner />}
+
 		<div style={{float : 'right'}}>
 			<form align="right" name="form1" method="post" action="http://192.168.15.168:8001/html/test/logout.php">
 			<input name="submit2" type="submit" id="submit2" value="Cerrar sesion" style={{float : 'right',  lineHeight : '25px'}}/> 
