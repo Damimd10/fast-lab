@@ -1,4 +1,6 @@
 <?php		
+	session_start();
+
         header("Access-Control-Allow-Origin: *");
         header("Content-Type: application/json; charset=UTF-8");
         $method = $_SERVER['REQUEST_METHOD'];
@@ -39,10 +41,10 @@
             'Medio interno' => array('NAS', 'KAS', "MGS", 'CAS', "CL", "FOS", "CAI", "GLU"),
             'Hepatograma' => array('TGO', 'TGP', 'ALP', 'BIT', 'BID', 'BILI', 'GGT'),
             'Coagulograma' => array('QUICKA', 'QUICKR', "APTT", "TTRO", "FIBRI"),
-            'Gasometria' => array("PHT", "PO2T", "PCO2T", "CO3H", "EB", "SO2", "HB", "TM"),
+            'Gasometria' => array("PHT", "PO2T", "PCO2T", "CO3H", "EB", "SO2", "HB"),
             'Dosajes' => array("FK", "CS0R"),
 			'Hierro' => array("FERR", "FES", "SATU", "TIB", "TRF"),
-            'Excluir' => array('BAS', 'EOS', 'META', 'MI', 'MON', 'PRO', 'SB', 'SUMAL', "SR", "NE", "TEMP", "CTO2", "ERC", "QUICKT", "FIO2", "A/A", "RPLA", "ASP", "BILU", "COLOR", "CRIS", "EFQ", "USPRM", "SEDI", "UMUC", "COLCIT", "ASPCIT", "RTM", "MATD" ),
+            'Excluir' => array('BAS', 'EOS', 'META', 'MI', 'MON', 'PRO', 'SB', 'SUMAL', "SR", "TM", "NE", "TEMP", "CTO2", "ERC", "QUICKT", "FIO2", "A/A", "RPLA", "ASP", "BILU", "COLOR", "CRIS", "EFQ", "USPRM", "SEDI", "UMUC", "COLCIT", "ASPCIT", "RTM", "MATD" ),
             'Otros' => array()
         );
         
@@ -467,26 +469,7 @@
 						$textificado_corto .= substr($coagulograma, 0, -1) . " ";
 						continue;
 					}
-					// Formateo de gasometria
-					if ($key_grupos == "Gasometria") {
-						if ($solicitud["Gasometria"]["TM"]["resultado"] == "AR") { 
-							$EAB = "EABa: ";			
-						}
-						else {
-							$EAB = "EABv: ";			
-						}
-						foreach($grupo_de_estudios as $codigo_de_estudio => $estudio) {
-							if ($codigo_de_estudio == "TM" or $codigo_de_estudio == "HB") {
-								continue;
-							}
-							$EAB .= $estudio["resultado"] . "/";
-							$textificado_largo .= $estudio["nombre_estudio"] . ": " . $estudio["resultado"] . " " . $estudio["unidades"] . ", ";
-						}
-						$textificado_corto .= substr($EAB, 0, -1) . " ";
-						continue;
-					}
 					
-					// Formateo del resto de estudios
                     foreach($grupo_de_estudios as $codigo_de_estudio => $estudio) {
                         $textificado_largo .= $estudio["nombre_estudio"] . ": " . $estudio["resultado"] . " " . $estudio["unidades"] . ", ";
                         if (isset($abreviar_nombres_estudios[$codigo_de_estudio])) { 

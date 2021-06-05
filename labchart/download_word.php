@@ -10,7 +10,7 @@
     require "vendor/autoload.php";
     $pw = new \PhpOffice\PhpWord\PhpWord();
 
-    $array = json_decode(file_get_contents("http://localhost/labchart.php?piso=" . $piso), true);
+    $array = json_decode(file_get_contents("http://http://192.168.15.168:8001/html/labchart/labchart.php?piso=" . $piso), true);
     
     foreach ($array as $estudio) {
         $texto = "<p>(" . $estudio['Cama'] . ") " . $estudio["Nombre"] . " Hora: " . $estudio["timestamp"] . "</p> <p>" . $estudio["text_corto"] . "</p>";
