@@ -26,44 +26,33 @@ function getChromeVersion () {
 }
 const chromeVersion = getChromeVersion()
 
-
-
-
-
-
-function App() {
 // Credential check. If the user isn't logged in, redirects to login.html
-	async function checkLogin() {
-		let response = await fetch(`http://192.168.15.168:8001/html/test/check_login.php`, {credentials: "same-origin", signal: signal})
-		let login_respuesta = await response.text()
-	  if (login_respuesta == "no") {
-		console.log("Credenciales no aprobadas")
-		window.location = `http://192.168.15.168:8001/html/test/login.html`
-	  }
-	  if (login_respuesta == "si") { 
-		console.log("Credenciales ok")
-	  }
-	}
-	checkLogin()
-  
-  const [patients, setPatients] = useState([])
-  const [activeFloor, setActiveFloor] = useState(0)
+async function checkLogin() {
+	let response = await fetch(`http://192.168.15.168:8001/html/test/check_login.php`, {credentials: "same-origin", signal: signal})
+	let login_respuesta = await response.text()
+  if (login_respuesta == "no") {
+	console.log("Credenciales no aprobadas")
+	window.location = `http://192.168.15.168:8001/html/test/login.html`
+  }
+  if (login_respuesta == "si") { 
+	console.log("Credenciales ok")
+  }
+}
 
-// Loads the last recorded response stored in cache from get_cache.php 
+checkLogin().catch(e => {
+console.log(e)
+})
+
+function App() {	
+	const [patients, setPatients] = useState([])
+	const [activeFloor, setActiveFloor] = useState(0)
+
   useEffect(() => {
 	if (controller) {
 		controller.abort()
 	}
-    fetch( debugging ? `http://192.168.15.168:8001/html/test/labchart/get_cache.php?piso=${activeFloor}` : `http://192.168.15.168:8001/html/test/labchart/get_cache.php?piso=${activeFloor}`, {credentials:'same-origin'})
-	  .then(response => response.json())
-      .then(setPatients)
-	  .catch(err => { 
-	  console.log(err);})
   }, [activeFloor])
   
-// Assigns the controller and signal for aborting the loading 
-// Improves performance when changing floors before the last floor fully loaded).
-// Note: AbortController only works in new versions of Chrome.
   useEffect(() => {
 	  if (chromeVersion > 80) {
 		controller = new AbortController()
@@ -74,7 +63,21 @@ function App() {
 		signal = undefined
 	  }
 	}, [activeFloor])
-	  
+
+// Loads the last recorded response stored in cache from get_cache.php 
+  useEffect(() => {
+    fetch( debugging ? `http://192.168.15.168:8001/html/test/labchart/get_cache.php?piso=${activeFloor}` : `http://192.168.15.168:8001/html/test/labchart/get_cache.php?piso=${activeFloor}`, {credentials:'same-origin', signal:signal})
+	  .then(response => response.json())
+      .then(setPatients)
+	  .catch(err => { 
+	  console.log(err);})
+  }, [activeFloor])
+  
+// Assigns the controller and signal for aborting the loading 
+// Improves performance when changing floors before the last floor fully loaded).
+// Note: AbortController only works in new versions of Chrome.
+
+	
 // Retrieves updated data from labchart.php from a specific floor.
   useEffect(() => {
     fetch(debugging ?  `http://192.168.15.168:8001/html/test/labchart/labchart.php?piso=${activeFloor}` : `http://192.168.15.168:8001/html/test/labchart/labchart.php?piso=${activeFloor}`, {
